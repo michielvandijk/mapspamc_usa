@@ -77,6 +77,9 @@ adm2_err <- ha_df %>%
                                               adm2_code) %>%
                      unique() %>%
                      mutate(source = "map"))
+write_csv(adm2_err, file.path(param$db_path,
+                              glue("subnational_statistics/{param$iso3c}/adm2_inconsistencies_{param$year}_{param$iso3c}.csv")))
+
 
 # This is fine, all matched!
 adm1_err <- ha_df %>% 
