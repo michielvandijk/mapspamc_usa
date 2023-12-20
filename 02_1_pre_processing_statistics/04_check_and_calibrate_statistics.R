@@ -30,6 +30,7 @@ fao_raw <- read_csv(file.path(param$model_path,
 
 
 # PROCESS HA STATISTICS ----------------------------------------------------------------
+
 # wide to long format
 ha_df <- ha_df_raw %>%
   pivot_longer(-c(adm_name, adm_code, adm_level), names_to = "crop", values_to = "ha")
@@ -61,41 +62,29 @@ ha_df <- ha_df %>%
 check <- check_statistics(ha_df, param, out = TRUE)
 check
 
-
-# NOTES ----------------------------------------------------------------------------------
-
-#' Your map and your statistics are not aligned. I find the following inconsistencies
-
-# adm2 units comparison between maps and stat
-adm2_err <- ha_df %>% 
-  dplyr::filter(adm_level == 2) %>% 
-  dplyr::rename(adm2_name = adm_name, adm2_code = adm_code) %>% 
-  dplyr::select(adm2_name, adm2_code) %>%
+# Ensure all adms from shapefile are included and NA is added for those for which there is not information
+adm2_add <- adm_list %>%
+  dplyr::select(adm_name = adm2_name,
+                adm_code = adm2_code) %>%
   unique() %>%
-  mutate(source2 = "stat") %>%
-  dplyr::full_join(adm_list %>% dplyr::select(adm2_name,
-                                              adm2_code) %>%
-                     unique() %>%
-                     mutate(source = "map"))
-write_csv(adm2_err, file.path(param$db_path,
-                              glue("subnational_statistics/{param$iso3c}/adm2_inconsistencies_{param$year}_{param$iso3c}.csv")))
+  expand_grid(crop = unique(ha_df$crop)) %>%
+  mutate(adm_level = 2) %>%
+  left_join(ha_df %>%
+              dplyr::filter(adm_level == 2) %>% 
+              dplyr::select(adm_name, adm_code, adm_level, crop, ha)) |>
+  mutate(ha = ifelse(is.na(ha), 0, ha))
 
+ha_df <- bind_rows(
+  ha_df %>%
+    filter(adm_level != 2),
+  adm2_add
+)
 
-# This is fine, all matched!
-adm1_err <- ha_df %>% 
-  dplyr::filter(adm_level == 1) %>% 
-  dplyr::rename(adm1_name = adm_name, adm1_code = adm_code) %>% 
-  dplyr::select(adm1_name, adm1_code) %>%
-  unique() %>%
-  mutate(source2 = "stat") %>%
-  dplyr::full_join(adm_list %>% dplyr::select(adm1_name,
-                                              adm1_code) %>%
-                     unique() %>%
-                     mutate(source = "map"))
-
+# Remove Alaska (USAK) and Rhode Island (USRI), which only have very tiny crop land and crop area, resulting in errors
+ha_df <- ha_df |>
+  filter(!str_detect(adm_code, 'USAK|USRI'))
 
 # ---------------------------------------------------------------------------------------
-
 
 # Make sure the totals at higher levels are the same as subtotals
 # We start at the lowest level, assuming lower levels are preferred if more than one level
@@ -187,6 +176,28 @@ ggplot(data = fao_stat) +
   geom_col(aes(x = source, y = ha, fill = source)) +
   facet_wrap(~crop, scales = "free")
 
+# Add adm1 values for crops that are added using FAOSTAT data (crop_add) in order to run the model at solve_level = 1
+# We distribute the crops using adm1 total crop area for now
+
+adm1_add <- ha_df |> 
+  filter(adm_level == 1) |>
+  group_by(adm_name, adm_code, adm_level) |>
+  summarize(ha = sum(ha, na.rm = TRUE),
+            .groups = "drop") |>
+  mutate(crop_area_share = ha/sum(ha, na.rm = TRUE)) |>
+  dplyr::select(-ha) |>
+  expand_grid(crop = crop_add) |>
+  left_join(ha_df |>
+              filter(crop %in% crop_add) |>
+              dplyr::select(-adm_name, -adm_code,-adm_level)
+  ) |>
+  mutate(ha = crop_area_share * ha) |>
+  dplyr::select(-crop_area_share)
+
+ha_df <- bind_rows(
+  ha_df,
+  adm1_add
+)
 
 # FINALIZE HA -----------------------------------------------------------------------------
 # Consistency checks
@@ -200,12 +211,14 @@ ha_df <- ha_df %>%
 
 
 # PROCESS FARMING SYSTEM SHARES ------------------------------------------------------------
-# ci does not need to be adjusted
-ps_df <- ps_df_raw
+# ci does not need to be adjusted but we need to remove Alaska and Rhode Island
+ps_df <- ps_df_raw |>
+  filter(!adm_code %in% c("USAK", "USRI"))
 
 # PROCESS CROPPING INTENSITY ---------------------------------------------------------------
-# ci does not need to be adjusted
-ci_df <- ci_df_raw
+# ci does not need to be adjusted but we need to remove Alaska and Rhode Island
+ci_df <- ci_df_raw |>
+  filter(!adm_code %in% c("USAK", "USRI"))
 
 
 # SAVE -------------------------------------------------------------------------------------

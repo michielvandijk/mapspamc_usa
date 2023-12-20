@@ -5,6 +5,10 @@
 #' Contact:  michiel.vandijk@wur.nl
 #'========================================================================================
 
+# Conneticut (USCT) is very small and therefore only covers a single cropland value. 
+# This creates an error as terra cannot create a tif file from a single grid cell.
+# Probably we can run the validation without this state but that would require tweaking the code.
+
 # SOURCE PARAMETERS ----------------------------------------------------------------------
 source(here::here("06_model_validation/01_alternative_model_setup.r"))
 
@@ -35,7 +39,8 @@ combine_inputs(alt_param)
 
 # RUN MODEL -----------------------------------------------------------------------------
 if(alt_param$model == "min_entropy"){
-  run_mapspamc(alt_param, solver = "IPOPT")
+  #run_mapspamc(alt_param, solver = "IPOPT")
+  run_mapspamc(alt_param, solver = "CONOPT4")
 } else {
   run_mapspamc(alt_param, solver = "CPLEX")
 }

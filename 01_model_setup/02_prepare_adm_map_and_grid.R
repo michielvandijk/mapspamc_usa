@@ -103,13 +103,13 @@ plot(adm_map$geometry, main = "ADM all polygons")
 # Area under National Administration, which is the part of Lake Malawi that belongs to Malawi
 # and Likoma, several small islands in the lake that are not covered by the statistics.
 # Set the adm_name by ADM level which need to be removed. Otherwise remove the script.
- adm1_to_remove <- c("")
+ adm1_to_remove <- c("RHODE ISLAND", "ALASKA")
  adm2_to_remove <- c("")
 
 # Remove ADMs
 adm_map <- adm_map %>%
-  filter(adm1_name != adm1_to_remove) %>%
-  filter(adm2_name != adm2_to_remove)
+  filter(!adm1_name %in% adm1_to_remove) %>%
+  filter(!adm2_name %in% adm2_to_remove)
 
 plot(adm_map$geometry, main = "ADM polygons removed")
 par(mfrow=c(1,1))
